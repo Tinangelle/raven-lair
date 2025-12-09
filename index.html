@@ -8,7 +8,7 @@
     <meta name="format-detection" content="telephone=no">
     <title>鸦巢</title>
     <style>
-        /* --- 1. 基础样式 --- */
+        /* --- 1. 基础变量 --- */
         :root {
             --bg-color: #000000;
             --text-color: #ffffff;
@@ -16,8 +16,10 @@
             --input-bg: #1c1c1e;
             --separator: #38383a;
             --accent: #bf5af2;
-            /* 定义顶部栏高度 */
-            --header-height: 50px; 
+            /* 顶部栏高度：增加高度以避开灵动岛/刘海 */
+            --header-inner-height: 50px; 
+            /* 顶部总高度 = 刘海 + 内部高度 + 额外缓冲 */
+            --header-total-height: calc(env(safe-area-inset-top) + var(--header-inner-height) + 10px);
         }
 
         body {
@@ -26,81 +28,72 @@
             font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
             margin: 0;
             padding: 0;
-            /* 关键修改：body 不再负责避让刘海，交给 header 自己处理 */
             height: 100vh;
             display: flex;
             flex-direction: column;
             overflow: hidden; 
         }
 
-        /* --- 2. 顶部导航 (强制固定在顶部) --- */
+        /* --- 2. 顶部导航 (修复遮挡问题) --- */
         #header {
-            position: fixed; /* 钉死在屏幕上，不随滚动条移动 */
-            top: 0;
-            left: 0;
-            right: 0;
-            height: var(--header-height);
-            
-            /* 关键修改：利用 padding 避让刘海 */
-            padding-top: env(safe-area-inset-top); 
-            padding-bottom: 10px; /* 给搜索框留点呼吸空间 */
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            /* 关键：利用 padding 把内容往下挤，避开刘海 */
+            padding-top: calc(env(safe-area-inset-top) + 10px); 
+            padding-bottom: 10px;
             padding-left: 16px;
             padding-right: 16px;
-
+            height: var(--header-inner-height);
+            
             display: flex;
-            align-items: end; /* 让内容靠下，避开刘海 */
-            gap: 10px;
+            align-items: center;
+            gap: 12px;
             
-            /*以此解决文字和列表重叠问题：毛玻璃背景 */
-            background: rgba(0,0,0,0.85); 
-            backdrop-filter: blur(20px); 
+            /* 背景加深，防止透出下面的字 */
+            background: rgba(0,0,0,0.95); 
+            backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
-            
-            z-index: 100; /* 保证层级最高 */
-            border-bottom: 0.5px solid #333; /* 加条线区分 */
+            z-index: 100;
+            border-bottom: 0.5px solid #222;
         }
 
-        /* 搜索框样式 */
         #search-box {
             flex: 1;
             background: var(--input-bg);
             border: none;
             border-radius: 10px;
-            height: 36px; /* 固定高度 */
+            height: 36px;
             padding: 0 12px;
             color: white;
             font-size: 17px;
             outline: none;
         }
 
-        /* 排序按钮 */
         #sort-btn {
             background: none;
             border: none;
-            color: var(--accent); /* 用紫色突出 */
+            color: var(--accent);
             font-size: 16px;
             font-weight: 600;
             padding: 5px;
             height: 36px;
-            line-height: 36px;
         }
 
         /* --- 3. 列表区域 --- */
         #list-container {
             flex: 1;
             overflow-y: auto;
-            -webkit-overflow-scrolling: touch; /* 丝滑滚动 */
+            -webkit-overflow-scrolling: touch;
             padding: 0 16px;
-            
-            /* 关键修改：列表的顶部要留出 Header + 刘海 的高度，否则第一条会被挡住 */
-            padding-top: calc(var(--header-height) + env(safe-area-inset-top) + 20px);
-            padding-bottom: 120px; /* 底部给输入框留够位置 */
+            /* 顶部内边距 = Header的总高度，保证第一条不被挡住 */
+            padding-top: var(--header-total-height);
+            padding-bottom: 120px; 
         }
 
         .item {
             display: flex;
             align-items: flex-start;
-            padding: 12px 0;
+            padding: 14px 0;
             border-bottom: 0.5px solid var(--separator);
             animation: fadeIn 0.3s ease;
         }
@@ -110,15 +103,21 @@
             height: 22px;
             border: 2px solid var(--secondary-text);
             border-radius: 50%;
-            margin-right: 12px;
+            margin-right: 14px;
             flex-shrink: 0;
             margin-top: 2px;
             transition: all 0.2s;
         }
-
-        .circle:active {
+        
+        /* 归档后的视觉样式 */
+        .item.archived-style .circle {
             background-color: var(--secondary-text);
             opacity: 0.5;
+            border-color: transparent;
+        }
+        .item.archived-style .content {
+            color: #555;
+            text-decoration: line-through;
         }
 
         .content {
@@ -129,7 +128,8 @@
             word-break: break-word;
         }
 
-        .archived {
+        /* 隐藏动画 */
+        .hiding {
             opacity: 0;
             transform: translateX(-20px);
             transition: all 0.3s ease;
@@ -138,12 +138,10 @@
         /* --- 4. 底部输入区 --- */
         #footer {
             position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: var(--bg-color); /* 纯黑背景遮挡列表 */
+            bottom: 0; left: 0; right: 0;
+            background: var(--bg-color);
             padding: 10px 16px;
-            padding-bottom: calc(10px + env(safe-area-inset-bottom)); /* 避让底部横条 */
+            padding-bottom: calc(10px + env(safe-area-inset-bottom));
             z-index: 90;
         }
 
@@ -159,21 +157,19 @@
             height: 22px;
             border: 2px dashed var(--secondary-text);
             border-radius: 50%;
-            margin-right: 12px;
+            margin-right: 14px;
         }
 
         #real-input-area {
             display: none;
             position: fixed;
-            bottom: 0; 
-            left: 0; 
-            right: 0;
+            bottom: 0; left: 0; right: 0;
             background: var(--input-bg);
             padding: 16px;
             padding-bottom: calc(16px + env(safe-area-inset-bottom));
             border-top-left-radius: 16px;
             border-top-right-radius: 16px;
-            z-index: 101; /* 比 Header 还高 */
+            z-index: 101;
         }
 
         textarea {
@@ -206,12 +202,11 @@
 <body>
 
     <div id="header">
-        <input type="text" id="search-box" placeholder="搜索">
+        <input type="text" id="search-box" placeholder="搜索 (含已归档)">
         <button id="sort-btn" onclick="toggleSort()">↓</button>
     </div>
 
-    <div id="list-container">
-        </div>
+    <div id="list-container"></div>
 
     <div id="overlay" onclick="saveAndClose()"></div>
 
@@ -226,10 +221,9 @@
     </div>
 
     <script>
-        // --- 数据与逻辑 ---
-        
         let notes = JSON.parse(localStorage.getItem('crows_nest_data')) || [];
-        let isDesc = true; // 默认降序 (最新的在上面)
+        let isDesc = true; 
+        let editingId = null; // 用于记录正在修改哪一条笔记
 
         const listEl = document.getElementById('list-container');
         const inputArea = document.getElementById('real-input-area');
@@ -239,13 +233,19 @@
         const searchBox = document.getElementById('search-box');
         const sortBtn = document.getElementById('sort-btn');
 
-        // 1. 渲染列表
         function render() {
             listEl.innerHTML = '';
             
-            // 过滤 (搜索)
-            const query = searchBox.value.toLowerCase();
-            let filtered = notes.filter(n => !n.archived && n.text.toLowerCase().includes(query));
+            const query = searchBox.value.trim().toLowerCase();
+            let filtered;
+
+            if (query) {
+                // 搜索模式：显示匹配的内容，哪怕已归档
+                filtered = notes.filter(n => n.text.toLowerCase().includes(query));
+            } else {
+                // 正常模式：只显示未归档
+                filtered = notes.filter(n => !n.archived);
+            }
 
             // 排序
             filtered.sort((a, b) => isDesc ? b.time - a.time : a.time - b.time);
@@ -253,34 +253,64 @@
             filtered.forEach(note => {
                 const div = document.createElement('div');
                 div.className = 'item';
+                // 如果是搜索出来的已归档内容，加个样式区分
+                if(note.archived) div.classList.add('archived-style');
+
                 div.innerHTML = `
-                    <div class="circle" onclick="archiveNote(${note.id}, this)"></div>
-                    <div class="content">${note.text}</div>
+                    <div class="circle" onclick="event.stopPropagation(); archiveNote(${note.id}, this)"></div>
+                    <div class="content" onclick="openInput(${note.id})">${note.text}</div>
                 `;
                 listEl.appendChild(div);
             });
         }
 
-        // 2. 打开输入框
-        function openInput() {
+        // 打开输入框 (支持新增 或 修改)
+        function openInput(id = null) {
             overlay.style.display = 'block';
             inputArea.style.display = 'block';
-            ghostInput.style.opacity = '0'; // 隐藏幽灵
-            textarea.value = ''; // 清空
+            ghostInput.style.opacity = '0';
+            
+            if (id) {
+                // 修改模式
+                const note = notes.find(n => n.id === id);
+                if (note) {
+                    textarea.value = note.text;
+                    editingId = id; // 标记正在编辑 ID
+                }
+            } else {
+                // 新增模式
+                textarea.value = '';
+                editingId = null;
+            }
+            
             textarea.focus();
         }
 
-        // 3. 保存并关闭 (核心交互：失焦即存)
+        // 保存逻辑 (区分新增和修改)
         function saveAndClose() {
             const text = textarea.value.trim();
+            
             if (text) {
-                // 新增笔记
-                notes.push({
-                    id: Date.now(),
-                    text: text,
-                    time: Date.now(),
-                    archived: false
-                });
+                if (editingId) {
+                    // 更新旧笔记
+                    const note = notes.find(n => n.id === editingId);
+                    if (note) {
+                        note.text = text;
+                        // 更新时间戳让它浮动到最新？如果不想要这个逻辑，可以把下面这行删掉
+                        note.time = Date.now(); 
+                        // 如果修改了已归档的笔记，要不要把它“复活”？
+                        // 这里默认复活：
+                        note.archived = false;
+                    }
+                } else {
+                    // 创建新笔记
+                    notes.push({
+                        id: Date.now(),
+                        text: text,
+                        time: Date.now(),
+                        archived: false
+                    });
+                }
                 saveData();
             }
             
@@ -289,41 +319,35 @@
             inputArea.style.display = 'none';
             ghostInput.style.opacity = '1';
             textarea.blur();
+            editingId = null; // 重置编辑状态
             render();
         }
 
-        // 4. 归档逻辑
         window.archiveNote = function(id, el) {
-            // 视觉动画
             const item = el.parentElement;
-            item.classList.add('archived');
+            item.classList.add('hiding'); // 播放消失动画
             
-            // 延迟删除数据，等待动画
             setTimeout(() => {
                 const note = notes.find(n => n.id === id);
-                if (note) note.archived = true;
+                if (note) note.archived = !note.archived; // 切换状态
                 saveData();
                 render();
             }, 300);
         }
 
-        // 5. 切换排序
         window.toggleSort = function() {
             isDesc = !isDesc;
             sortBtn.innerText = isDesc ? '↓' : '↑';
             render();
         }
 
-        // 6. 搜索监听
         searchBox.addEventListener('input', render);
 
         function saveData() {
             localStorage.setItem('crows_nest_data', JSON.stringify(notes));
         }
 
-        // 初始化
         render();
-
     </script>
 </body>
 </html>
