@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <title>鸦巢</title>
+    <style>
+        /* --- 1. 基础样式设定 (黑底白字) --- */
+        :root {
+            --bg-color: #000000;
+            --text-color: #ffffff;
+            --secondary-text: #8e8e93;
+            --input-bg: #1c1c1e;
+            --separator: #38383a;
+            --accent: #bf5af2; /* 你截图里的紫色 */
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            padding-top: env(safe-area-inset-top); /* 适配刘海屏 */
+            padding-bottom: env(safe-area-inset-bottom);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* 禁止整体滚动，只允许列表滚动 */
+        }
+
+        /* --- 2. 顶部导航 (搜索 + 排序) --- */
+        #header {
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            /* background: rgba(0,0,0,0.8); */
+            /* backdrop-filter: blur(10px); */
+            z-index: 10;
+        }
+
+        /* 搜索框样式 */
+        #search-box {
+            flex: 1;
+            background: var(--input-bg);
+            border: none;
+            border-radius: 10px;
+            padding: 8px 12px;
+            color: white;
+            font-size: 17px;
+            outline: none;
+        }
+
+        /* 排序按钮 */
+        #sort-btn {
+            background: none;
+            border: none;
+            color: var(--secondary-text);
+            font-size: 16px;
+            font-weight: 600;
+            padding: 5px;
+        }
+
+        /* --- 3. 列表区域 --- */
+        #list-container {
+            flex: 1;
+            overflow-y: auto; /* 允许滚动 */
+            padding: 0 16px;
+            padding-bottom: 100px; /* 给底部输入框留位置 */
+        }
+
+        .item {
+            display: flex;
+            align-items: flex-start; /* 顶部对齐 */
+            padding: 12px 0;
+            border-bottom: 0.5px solid var(--separator);
+            animation: fadeIn 0.3s ease;
+        }
+
+        /* 归档圆圈 */
+        .circle {
+            width: 22px;
+            height: 22px;
+            border: 2px solid var(--secondary-text);
+            border-radius: 50%;
+            margin-right: 12px;
+            flex-shrink: 0;
+            margin-top: 2px; /* 微调对齐文字 */
+            transition: all 0.2s;
+        }
+
+        .circle:active {
+            background-color: var(--secondary-text);
+            opacity: 0.5;
+        }
+
+        /* 笔记内容 */
+        .content {
+            flex: 1;
+            font-size: 17px;
+            line-height: 1.4;
+            white-space: pre-wrap; /* 保留换行 */
+            word-break: break-word;
+        }
+
+        /* 归档动画 */
+        .archived {
+            opacity: 0;
+            transform: translateX(-20px);
+            transition: all 0.3s ease;
+        }
+
+        /* --- 4. 底部输入区 (核心交互) --- */
+        #footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-color); /* 不透明背景，遮挡后面内容 */
+            padding: 10px 16px;
+            padding-bottom: calc(10px + env(safe-area-inset-bottom));
+            z-index: 20;
+        }
+
+        /* 幽灵占位符 (虚线圈) */
+        #ghost-input {
+            display: flex;
+            align-items: center;
+            height: 44px;
+            color: var(--secondary-text);
+            font-size: 17px;
+        }
+
+        .dashed-circle {
+            width: 22px;
+            height: 22px;
+            border: 2px dashed var(--secondary-text);
+            border-radius: 50%;
+            margin-right: 12px;
+        }
+
+        /* 真正的输入框 (默认隐藏) */
+        #real-input-area {
+            display: none; /* 激活时显示 */
+            position: fixed;
+            bottom: 0; 
+            left: 0; 
+            right: 0;
+            background: var(--input-bg);
+            padding: 16px;
+            padding-bottom: calc(16px + env(safe-area-inset-bottom));
+            border-top-left-radius: 16px;
+            border-top-right-radius: 16px;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+            z-index: 30;
+        }
+
+        textarea {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 18px;
+            font-family: inherit;
+            resize: none;
+            outline: none;
+            max-height: 40vh; /* 最多占屏幕40% */
+        }
+
+        /* 遮罩层 (用于点击空白处保存) */
+        #overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 25;
+            backdrop-filter: blur(2px);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="header">
+        <input type="text" id="search-box" placeholder="搜索">
+        <button id="sort-btn" onclick="toggleSort()">↓</button>
+    </div>
+
+    <div id="list-container">
+        </div>
+
+    <div id="overlay" onclick="saveAndClose()"></div>
+
+    <div id="footer">
+        <div id="ghost-input" onclick="openInput()">
+            <div class="dashed-circle"></div>
+        </div>
+    </div>
+
+    <div id="real-input-area">
+        <textarea id="note-input" rows="3" placeholder="记点什么..."></textarea>
+    </div>
+
+    <script>
+        // --- 数据与逻辑 ---
+        
+        let notes = JSON.parse(localStorage.getItem('crows_nest_data')) || [];
+        let isDesc = true; // 默认降序 (最新的在上面)
+
+        const listEl = document.getElementById('list-container');
+        const inputArea = document.getElementById('real-input-area');
+        const overlay = document.getElementById('overlay');
+        const textarea = document.getElementById('note-input');
+        const ghostInput = document.getElementById('ghost-input');
+        const searchBox = document.getElementById('search-box');
+        const sortBtn = document.getElementById('sort-btn');
+
+        // 1. 渲染列表
+        function render() {
+            listEl.innerHTML = '';
+            
+            // 过滤 (搜索)
+            const query = searchBox.value.toLowerCase();
+            let filtered = notes.filter(n => !n.archived && n.text.toLowerCase().includes(query));
+
+            // 排序
+            filtered.sort((a, b) => isDesc ? b.time - a.time : a.time - b.time);
+
+            filtered.forEach(note => {
+                const div = document.createElement('div');
+                div.className = 'item';
+                div.innerHTML = `
+                    <div class="circle" onclick="archiveNote(${note.id}, this)"></div>
+                    <div class="content">${note.text}</div>
+                `;
+                listEl.appendChild(div);
+            });
+        }
+
+        // 2. 打开输入框
+        function openInput() {
+            overlay.style.display = 'block';
+            inputArea.style.display = 'block';
+            ghostInput.style.opacity = '0'; // 隐藏幽灵
+            textarea.value = ''; // 清空
+            textarea.focus();
+        }
+
+        // 3. 保存并关闭 (核心交互：失焦即存)
+        function saveAndClose() {
+            const text = textarea.value.trim();
+            if (text) {
+                // 新增笔记
+                notes.push({
+                    id: Date.now(),
+                    text: text,
+                    time: Date.now(),
+                    archived: false
+                });
+                saveData();
+            }
+            
+            // 还原界面
+            overlay.style.display = 'none';
+            inputArea.style.display = 'none';
+            ghostInput.style.opacity = '1';
+            textarea.blur();
+            render();
+        }
+
+        // 4. 归档逻辑
+        window.archiveNote = function(id, el) {
+            // 视觉动画
+            const item = el.parentElement;
+            item.classList.add('archived');
+            
+            // 延迟删除数据，等待动画
+            setTimeout(() => {
+                const note = notes.find(n => n.id === id);
+                if (note) note.archived = true;
+                saveData();
+                render();
+            }, 300);
+        }
+
+        // 5. 切换排序
+        window.toggleSort = function() {
+            isDesc = !isDesc;
+            sortBtn.innerText = isDesc ? '↓' : '↑';
+            render();
+        }
+
+        // 6. 搜索监听
+        searchBox.addEventListener('input', render);
+
+        function saveData() {
+            localStorage.setItem('crows_nest_data', JSON.stringify(notes));
+        }
+
+        // 初始化
+        render();
+
+    </script>
+</body>
+</html>
